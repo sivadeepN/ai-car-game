@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Flying Car Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Flying Car Game - Mobile Friendly</title>
 <style>
   body {
     margin: 0; overflow: hidden; background: #000; font-family: sans-serif;
+    touch-action: none;
   }
   canvas {
     display: block;
@@ -31,6 +33,43 @@
     margin: 0;
     padding-left: 16px;
   }
+  /* Mobile control buttons */
+  #mobileControls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    display: flex;
+    justify-content: space-around;
+    z-index: 15;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: rgba(0,255,255,0.3);
+    border: 2px solid cyan;
+    color: cyan;
+    font-size: 24px;
+    line-height: 70px;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 0 10px cyan;
+    touch-action: manipulation;
+  }
+  .btn:active {
+    background: rgba(0,255,255,0.6);
+    box-shadow: 0 0 20px cyan;
+  }
+  /* Hide controls on desktop */
+  @media(min-width: 600px) {
+    #mobileControls {
+      display: none;
+    }
+  }
 </style>
 </head>
 <body>
@@ -39,12 +78,19 @@
 <div id="instructions">
   <h3>🚘 How to Play</h3>
   <ul>
-    <li><b>← → ↑ ↓</b> — Move the car</li>
-    <li><b>Space</b> — Fire bullets</li>
+    <li><b>← → ↑ ↓</b> — Move the car (keyboard)</li>
+    <li><b>Space</b> — Fire bullets (keyboard)</li>
     <li>💥 Destroy obstacles by shooting</li>
     <li>🧠 No input for 3s = Autopilot</li>
     <li>⚠️ Avoid hitting blocks</li>
+    <li><b>Mobile:</b> Use buttons below</li>
   </ul>
+</div>
+
+<div id="mobileControls">
+  <div id="btnLeft" class="btn">◀</div>
+  <div id="btnShoot" class="btn">●</div>
+  <div id="btnRight" class="btn">▶</div>
 </div>
 
 <script>
@@ -69,6 +115,12 @@
   let lastInputTime = Date.now();
   let autopilot = false;
   let pathOffset = 0;
+
+  // Mobile control flags
+  let leftPressed = false;
+  let rightPressed = false;
+  let shootPressed = false;
+  let shootCooldown = 0;
 
   function drawBackground() {
     ctx.fillStyle = "#228B22"; // Green sides
@@ -139,6 +191,7 @@
   }
 
   function fireBullet() {
+    if (shootCooldown > 0) return;
     bullets.push({
       x: car.x + car.width / 2 - 2.5,
       y: car.y,
@@ -146,6 +199,7 @@
       height: 10,
       speed: 8
     });
+    shootCooldown = 15; // cooldown frames
   }
 
   function drawBullets() {
@@ -197,7 +251,6 @@
     );
     let targetX = car.x;
     if (danger.length > 0) {
-      // Check left and right clearance
       let leftClear = true,
         rightClear = true;
       for (let o of danger) {
@@ -206,10 +259,8 @@
       }
       if (leftClear && car.x > canvas.width * 0.2) targetX = car.x - car.speed;
       else if (rightClear && car.x + car.width < canvas.width * 0.8) targetX = car.x + car.speed;
-      else
-        targetX = car.x + (Math.random() > 0.5 ? -car.speed : car.speed);
+      else targetX = car.x + (Math.random() > 0.5 ? -car.speed : car.speed);
     }
-    // Keep in bounds
     if (targetX < canvas.width * 0.2) targetX = canvas.width * 0.2;
     if (targetX + car.width > canvas.width * 0.8) targetX = canvas.width * 0.8 - car.width;
 
@@ -245,11 +296,28 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
 
+    // Mobile controls override keyboard if active
     if (!autopilot) {
-      if (keys["ArrowLeft"] && car.x > canvas.width * 0.2) car.x -= car.speed;
-      if (keys["ArrowRight"] && car.x + car.width < canvas.width * 0.8) car.x += car.speed;
-      if (keys["ArrowUp"] && car.y > 0) car.y -= car.speed;
-      if (keys["ArrowDown"] && car.y + car.height < canvas.height) car.y += car.speed;
+      if (keys["ArrowLeft"] || leftPressed) {
+        if (car.x > canvas.width * 0.2) car.x -= car.speed;
+        lastInputTime = now;
+      }
+      if (keys["ArrowRight"] || rightPressed) {
+        if (car.x + car.width < canvas.width * 0.8) car.x += car.speed;
+        lastInputTime = now;
+      }
+      if (keys["ArrowUp"]) {
+        if (car.y > 0) car.y -= car.speed;
+        lastInputTime = now;
+      }
+      if (keys["ArrowDown"]) {
+        if (car.y + car.height < canvas.height) car.y += car.speed;
+        lastInputTime = now;
+      }
+      if ((keys[" "] || shootPressed) && shootCooldown === 0) {
+        fireBullet();
+        lastInputTime = now;
+      }
     } else {
       runAutopilot();
       drawAutopilotPath();
@@ -261,6 +329,8 @@
     drawBullets();
     updateBullets();
     drawScore();
+
+    if (shootCooldown > 0) shootCooldown--;
 
     score++;
     requestAnimationFrame(gameLoop);
@@ -281,6 +351,33 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   });
+
+  // Mobile button events
+  const btnLeft = document.getElementById("btnLeft");
+  const btnRight = document.getElementById("btnRight");
+  const btnShoot = document.getElementById("btnShoot");
+
+  function preventDefaultTouch(e) {
+    e.preventDefault();
+  }
+  btnLeft.addEventListener("touchstart", e => { leftPressed = true; lastInputTime = Date.now(); preventDefaultTouch(e); });
+  btnLeft.addEventListener("touchend", e => { leftPressed = false; preventDefaultTouch(e); });
+  btnLeft.addEventListener("touchcancel", e => { leftPressed = false; preventDefaultTouch(e); });
+
+  btnRight.addEventListener("touchstart", e => { rightPressed = true; lastInputTime = Date.now(); preventDefaultTouch(e); });
+  btnRight.addEventListener("touchend", e => { rightPressed = false; preventDefaultTouch(e); });
+  btnRight.addEventListener("touchcancel", e => { rightPressed = false; preventDefaultTouch(e); });
+
+  btnShoot.addEventListener("touchstart", e => { 
+    if (!shootPressed) {
+      shootPressed = true; 
+      lastInputTime = Date.now();
+      fireBullet();
+    }
+    preventDefaultTouch(e);
+  });
+  btnShoot.addEventListener("touchend", e => { shootPressed = false; preventDefaultTouch(e); });
+  btnShoot.addEventListener("touchcancel", e => { shootPressed = false; preventDefaultTouch(e); });
 
   gameLoop();
 </script>
