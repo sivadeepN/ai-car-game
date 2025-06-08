@@ -2,20 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flying Car Game with Autopilot</title>
+  <title>Flying Car Game</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
       background: #000;
+      font-family: sans-serif;
     }
     canvas {
       display: block;
+    }
+    #instructions {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 220px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #333;
+      z-index: 10;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    #instructions h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+    #instructions ul {
+      margin: 0;
+      padding-left: 16px;
     }
   </style>
 </head>
 <body>
 <canvas id="gameCanvas"></canvas>
+
+<!-- 🧠 Instructions Box -->
+<div id="instructions">
+  <h3>🚘 How to Play</h3>
+  <ul>
+    <li><b>← → ↑ ↓</b> — Move the car</li>
+    <li><b>Space</b> — Fire bullets</li>
+    <li>💥 Destroy obstacles by shooting</li>
+    <li>🧠 No input for 3s = Autopilot</li>
+    <li>⚠️ Avoid hitting blocks</li>
+  </ul>
+</div>
+
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -39,11 +74,11 @@ let lastInputTime = Date.now();
 let autopilot = false;
 
 function drawBackground() {
-  ctx.fillStyle = "#228B22";
+  ctx.fillStyle = "#228B22"; // Green sides
   ctx.fillRect(0, 0, canvas.width * 0.2, canvas.height);
   ctx.fillRect(canvas.width * 0.8, 0, canvas.width * 0.2, canvas.height);
 
-  ctx.fillStyle = "#555";
+  ctx.fillStyle = "#444"; // Road
   ctx.fillRect(canvas.width * 0.2, 0, canvas.width * 0.6, canvas.height);
 
   ctx.strokeStyle = "#fff";
@@ -166,7 +201,6 @@ function runAutopilot() {
     } else if (center < target.x) {
       car.x += car.speed;
     } else {
-      // Try left or right randomly
       if (Math.random() > 0.5 && car.x > canvas.width * 0.2) car.x -= car.speed;
       else if (car.x + car.width < canvas.width * 0.8) car.x += car.speed;
     }
