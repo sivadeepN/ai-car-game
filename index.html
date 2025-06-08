@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>Flying Car Game - Mobile Friendly with Boost</title>
+<title>Flying Car Game - Mobile Friendly</title>
 <style>
   body {
     margin: 0; overflow: hidden; background: #000; font-family: sans-serif;
@@ -41,22 +41,22 @@
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: 320px;
+    width: 280px;
     display: flex;
-    justify-content: space-between;
+    justify-content: space-around;
     z-index: 15;
     user-select: none;
     -webkit-user-select: none;
   }
   .btn {
-    width: 75px;
-    height: 75px;
+    width: 90px;
+    height: 90px;
     border-radius: 50%;
     background: rgba(0,255,255,0.3);
     border: 2px solid cyan;
     color: cyan;
-    font-size: 28px;
-    line-height: 75px;
+    font-size: 36px;
+    line-height: 90px;
     text-align: center;
     font-weight: bold;
     box-shadow: 0 0 10px cyan;
@@ -72,10 +72,11 @@
     #mobileControls {
       display: none;
     }
+  }
+  /* Hide instructions on mobile */
+  @media(max-width: 599px) {
     #instructions {
-      max-height: none;
-      overflow-y: visible;
-      width: 220px;
+      display: none;
     }
   }
 </style>
@@ -92,7 +93,6 @@
     <li>🧠 No input for 3s = Autopilot</li>
     <li>⚠️ Avoid hitting blocks</li>
     <li><b>Mobile:</b> Use buttons below</li>
-    <li><b>Boost:</b> Speeds car for 5 sec</li>
   </ul>
 </div>
 
@@ -100,7 +100,6 @@
   <div id="btnLeft" class="btn" title="Left">◀</div>
   <div id="btnShoot" class="btn" title="Shoot">●</div>
   <div id="btnRight" class="btn" title="Right">▶</div>
-  <div id="btnBoost" class="btn" title="Boost">⚡</div>
 </div>
 
 <script>
@@ -114,10 +113,7 @@
     y: canvas.height - 100,
     width: 50,
     height: 30,
-    baseSpeed: 6,
-    speed: 6,
-    boosting: false,
-    boostEndTime: 0
+    speed: 6
   };
 
   let keys = {};
@@ -133,7 +129,6 @@
   let leftPressed = false;
   let rightPressed = false;
   let shootPressed = false;
-  let boostPressed = false;
   let shootCooldown = 0;
 
   function drawBackground() {
@@ -252,11 +247,6 @@
     if (autopilot) {
       ctx.fillText("Autopilot ON", 20, 60);
     }
-    if (car.boosting) {
-      const left = Math.max(0, car.boostEndTime - Date.now());
-      const sec = (left / 1000).toFixed(1);
-      ctx.fillText("Boost: " + sec + "s", 20, 90);
-    }
   }
 
   function runAutopilot() {
@@ -305,23 +295,9 @@
     const now = Date.now();
     autopilot = now - lastInputTime > 3000;
 
-    if (gameOver) {
-      ctx.fillStyle = "white";
-      ctx.font = "48px sans-serif";
-      ctx.fillText("Game Over", canvas.width / 2 - 120, canvas.height / 2);
-      return;
-    }
-
-    // Manage boost duration
-    if (car.boosting && now > car.boostEndTime) {
-      car.boosting = false;
-      car.speed = car.baseSpeed;
-    }
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
 
-    // Controls - Keyboard + mobile buttons
     if (!autopilot) {
       if (keys["ArrowLeft"] || leftPressed) {
         car.x -= car.speed;
@@ -331,35 +307,19 @@
         car.x += car.speed;
         lastInputTime = now;
       }
-      if ((keys["ArrowUp"] || keys["ArrowDown"]) && !autopilot) {
-        // optional vertical movement if needed
-        lastInputTime = now;
-      }
       if ((keys[" "] || shootPressed) && shootCooldown === 0) {
         fireBullet();
         lastInputTime = now;
       }
     } else {
       runAutopilot();
+      drawAutopilotPath();
     }
 
-    // Clamp car position inside road bounds
     const roadStart = canvas.width * 0.2;
     const roadEnd = canvas.width * 0.8 - car.width;
     if (car.x < roadStart) car.x = roadStart;
     if (car.x > roadEnd) car.x = roadEnd;
-
-    if (boostPressed && !car.boosting) {
-      car.boosting = true;
-      car.speed = car.baseSpeed * 2;
-      car.boostEndTime = now + 5000; // 5 seconds boost
-      boostPressed = false; // reset to avoid repeated activation
-      lastInputTime = now;
-    }
-
-    if (autopilot) {
-      drawAutopilotPath();
-    }
 
     drawCar();
 
@@ -372,6 +332,13 @@
     drawBullets();
 
     if (shootCooldown > 0) shootCooldown--;
+
+    if (gameOver) {
+      ctx.fillStyle = "red";
+      ctx.font = "48px sans-serif";
+      ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+      return;
+    }
 
     score += 1;
     drawScore();
@@ -392,7 +359,7 @@
     keys[e.key] = false;
   });
 
-  // Mobile button event handlers
+  // Mobile buttons touch handlers
   document.getElementById("btnLeft").addEventListener("touchstart", e => {
     e.preventDefault();
     leftPressed = true;
@@ -419,15 +386,6 @@
   document.getElementById("btnShoot").addEventListener("touchend", e => {
     e.preventDefault();
     shootPressed = false;
-  });
-  document.getElementById("btnBoost").addEventListener("touchstart", e => {
-    e.preventDefault();
-    boostPressed = true;
-    lastInputTime = Date.now();
-  });
-  document.getElementById("btnBoost").addEventListener("touchend", e => {
-    e.preventDefault();
-    //boostPressed = false; // No need, boost is one-time press
   });
 
   gameLoop();
