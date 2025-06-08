@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flying Car Game with Autopilot</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const car = {
+  x: canvas.width / 2 - 25,
+  y: canvas.height - 100,
+  width: 50,
+  height: 30,
+  speed: 6
+};
+
+let keys = {};
+let obstacles = [];
+let bullets = [];
+let score = 0;
+let gameOver = false;
+let lastInputTime = Date.now();
+let autopilot = false;
+
+function drawBackground() {
+  ctx.fillStyle = "#228B22";
+  ctx.fillRect(0, 0, canvas.width * 0.2, canvas.height);
+  ctx.fillRect(canvas.width * 0.8, 0, canvas.width * 0.2, canvas.height);
+
+  ctx.fillStyle = "#555";
+  ctx.fillRect(canvas.width * 0.2, 0, canvas.width * 0.6, canvas.height);
+
+  ctx.strokeStyle = "#fff";
+  ctx.setLineDash([20, 20]);
+  ctx.lineWidth = 3;
+  for (let y = 0; y < canvas.height; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, y);
+    ctx.lineTo(canvas.width / 2, y + 20);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawCar() {
+  ctx.fillStyle = "#00ffff";
+  ctx.fillRect(car.x, car.y, car.width, car.height);
+  ctx.fillStyle = "#003333";
+  ctx.fillRect(car.x + 10, car.y + 5, 30, 10);
+  ctx.fillStyle = "#ff0000";
+  ctx.fillRect(car.x + 5, car.y + car.height - 5, 5, 5);
+  ctx.fillRect(car.x + car.width - 10, car.y + car.height - 5, 5, 5);
+}
+
+function createObstacle() {
+  const roadStart = canvas.width * 0.2;
+  const roadWidth = canvas.width * 0.6;
+  const size = Math.random() * 30 + 30;
+  obstacles.push({
+    x: Math.random() * (roadWidth - size) + roadStart,
+    y: -size,
+    width: size,
+    height: size,
+    speed: Math.random() * 2 + 3,
+    color: "#8B4513"
+  });
+}
+
+function drawObstacles() {
+  for (let obs of obstacles) {
+    ctx.fillStyle = obs.color;
+    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    ctx.strokeStyle = "#654321";
+    ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+  }
+}
+
+function updateObstacles() {
+  for (let obs of obstacles) {
+    obs.y += obs.speed;
+    if (
+      obs.x < car.x + car.width &&
+      obs.x + obs.width > car.x &&
+      obs.y < car.y + car.height &&
+      obs.y + obs.height > car.y
+    ) {
+      gameOver = true;
+    }
+  }
+  obstacles = obstacles.filter(o => o.y < canvas.height);
+}
+
+function fireBullet() {
+  bullets.push({
+    x: car.x + car.width / 2 - 2.5,
+    y: car.y,
+    width: 5,
+    height: 10,
+    speed: 8
+  });
+}
+
+function drawBullets() {
+  ctx.fillStyle = "yellow";
+  for (let b of bullets) {
+    ctx.fillRect(b.x, b.y, b.width, b.height);
+  }
+}
+
+function updateBullets() {
+  for (let b of bullets) {
+    b.y -= b.speed;
+  }
+
+  bullets = bullets.filter(bullet => {
+    for (let i = 0; i < obstacles.length; i++) {
+      let obs = obstacles[i];
+      if (
+        bullet.x < obs.x + obs.width &&
+        bullet.x + bullet.width > obs.x &&
+        bullet.y < obs.y + obs.height &&
+        bullet.y + bullet.height > obs.y
+      ) {
+        obstacles.splice(i, 1);
+        return false;
+      }
+    }
+    return bullet.y > 0;
+  });
+}
+
+function drawScore() {
+  ctx.fillStyle = "white";
+  ctx.font = "20px sans-serif";
+  ctx.fillText("Score: " + score, 20, 30);
+  if (autopilot) {
+    ctx.fillText("Autopilot ON", 20, 60);
+  }
+}
+
+function runAutopilot() {
+  const dangerZone = obstacles
+    .filter(o => o.y > car.y - 200 && o.y < car.y + 100)
+    .sort((a, b) => a.y - b.y);
+  if (dangerZone.length > 0) {
+    const target = dangerZone[0];
+    const center = car.x + car.width / 2;
+    if (center > target.x + target.width) {
+      car.x -= car.speed;
+    } else if (center < target.x) {
+      car.x += car.speed;
+    } else {
+      // Try left or right randomly
+      if (Math.random() > 0.5 && car.x > canvas.width * 0.2) car.x -= car.speed;
+      else if (car.x + car.width < canvas.width * 0.8) car.x += car.speed;
+    }
+  }
+}
+
+function gameLoop() {
+  const now = Date.now();
+  autopilot = now - lastInputTime > 3000;
+
+  if (gameOver) {
+    ctx.fillStyle = "white";
+    ctx.font = "48px sans-serif";
+    ctx.fillText("Game Over", canvas.width / 2 - 120, canvas.height / 2);
+    return;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+
+  if (!autopilot) {
+    if (keys["ArrowLeft"] && car.x > canvas.width * 0.2) car.x -= car.speed;
+    if (keys["ArrowRight"] && car.x + car.width < canvas.width * 0.8) car.x += car.speed;
+    if (keys["ArrowUp"] && car.y > 0) car.y -= car.speed;
+    if (keys["ArrowDown"] && car.y + car.height < canvas.height) car.y += car.speed;
+  } else {
+    runAutopilot();
+  }
+
+  drawCar();
+  drawObstacles();
+  updateObstacles();
+  drawBullets();
+  updateBullets();
+  drawScore();
+
+  score++;
+  requestAnimationFrame(gameLoop);
+}
+
+setInterval(createObstacle, 800);
+
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  lastInputTime = Date.now();
+  if (e.key === " ") fireBullet();
+});
+window.addEventListener("keyup", e => {
+  keys[e.key] = false;
+  lastInputTime = Date.now();
+});
+window.addEventListener("resize", () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+gameLoop();
+</script>
+</body>
+</html>
