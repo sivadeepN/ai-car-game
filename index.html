@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>Flying Car Game - Mobile Friendly</title>
+<title>Flying Car Game - Mobile Friendly with Boost</title>
 <style>
   body {
     margin: 0; overflow: hidden; background: #000; font-family: sans-serif;
@@ -17,6 +17,7 @@
     top: 20px;
     right: 20px;
     width: 220px;
+    max-height: 180px;
     background: rgba(255, 255, 255, 0.95);
     padding: 12px;
     border-radius: 10px;
@@ -24,6 +25,7 @@
     color: #333;
     z-index: 10;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    overflow-y: auto;
   }
   #instructions h3 {
     margin: 0 0 8px 0;
@@ -39,26 +41,27 @@
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: 260px;
+    width: 320px;
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
     z-index: 15;
     user-select: none;
     -webkit-user-select: none;
   }
   .btn {
-    width: 70px;
-    height: 70px;
+    width: 75px;
+    height: 75px;
     border-radius: 50%;
     background: rgba(0,255,255,0.3);
     border: 2px solid cyan;
     color: cyan;
-    font-size: 24px;
-    line-height: 70px;
+    font-size: 28px;
+    line-height: 75px;
     text-align: center;
     font-weight: bold;
     box-shadow: 0 0 10px cyan;
     touch-action: manipulation;
+    user-select: none;
   }
   .btn:active {
     background: rgba(0,255,255,0.6);
@@ -68,6 +71,11 @@
   @media(min-width: 600px) {
     #mobileControls {
       display: none;
+    }
+    #instructions {
+      max-height: none;
+      overflow-y: visible;
+      width: 220px;
     }
   }
 </style>
@@ -84,13 +92,15 @@
     <li>🧠 No input for 3s = Autopilot</li>
     <li>⚠️ Avoid hitting blocks</li>
     <li><b>Mobile:</b> Use buttons below</li>
+    <li><b>Boost:</b> Speeds car for 5 sec</li>
   </ul>
 </div>
 
 <div id="mobileControls">
-  <div id="btnLeft" class="btn">◀</div>
-  <div id="btnShoot" class="btn">●</div>
-  <div id="btnRight" class="btn">▶</div>
+  <div id="btnLeft" class="btn" title="Left">◀</div>
+  <div id="btnShoot" class="btn" title="Shoot">●</div>
+  <div id="btnRight" class="btn" title="Right">▶</div>
+  <div id="btnBoost" class="btn" title="Boost">⚡</div>
 </div>
 
 <script>
@@ -104,7 +114,10 @@
     y: canvas.height - 100,
     width: 50,
     height: 30,
-    speed: 6
+    baseSpeed: 6,
+    speed: 6,
+    boosting: false,
+    boostEndTime: 0
   };
 
   let keys = {};
@@ -120,6 +133,7 @@
   let leftPressed = false;
   let rightPressed = false;
   let shootPressed = false;
+  let boostPressed = false;
   let shootCooldown = 0;
 
   function drawBackground() {
@@ -238,6 +252,11 @@
     if (autopilot) {
       ctx.fillText("Autopilot ON", 20, 60);
     }
+    if (car.boosting) {
+      const left = Math.max(0, car.boostEndTime - Date.now());
+      const sec = (left / 1000).toFixed(1);
+      ctx.fillText("Boost: " + sec + "s", 20, 90);
+    }
   }
 
   function runAutopilot() {
@@ -293,25 +312,27 @@
       return;
     }
 
+    // Manage boost duration
+    if (car.boosting && now > car.boostEndTime) {
+      car.boosting = false;
+      car.speed = car.baseSpeed;
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
 
-    // Mobile controls override keyboard if active
+    // Controls - Keyboard + mobile buttons
     if (!autopilot) {
       if (keys["ArrowLeft"] || leftPressed) {
-        if (car.x > canvas.width * 0.2) car.x -= car.speed;
+        car.x -= car.speed;
         lastInputTime = now;
       }
       if (keys["ArrowRight"] || rightPressed) {
-        if (car.x + car.width < canvas.width * 0.8) car.x += car.speed;
+        car.x += car.speed;
         lastInputTime = now;
       }
-      if (keys["ArrowUp"]) {
-        if (car.y > 0) car.y -= car.speed;
-        lastInputTime = now;
-      }
-      if (keys["ArrowDown"]) {
-        if (car.y + car.height < canvas.height) car.y += car.speed;
+      if ((keys["ArrowUp"] || keys["ArrowDown"]) && !autopilot) {
+        // optional vertical movement if needed
         lastInputTime = now;
       }
       if ((keys[" "] || shootPressed) && shootCooldown === 0) {
@@ -320,64 +341,94 @@
       }
     } else {
       runAutopilot();
+    }
+
+    // Clamp car position inside road bounds
+    const roadStart = canvas.width * 0.2;
+    const roadEnd = canvas.width * 0.8 - car.width;
+    if (car.x < roadStart) car.x = roadStart;
+    if (car.x > roadEnd) car.x = roadEnd;
+
+    if (boostPressed && !car.boosting) {
+      car.boosting = true;
+      car.speed = car.baseSpeed * 2;
+      car.boostEndTime = now + 5000; // 5 seconds boost
+      boostPressed = false; // reset to avoid repeated activation
+      lastInputTime = now;
+    }
+
+    if (autopilot) {
       drawAutopilotPath();
     }
 
     drawCar();
-    drawObstacles();
+
+    if (Math.random() < 0.02) createObstacle();
+
     updateObstacles();
-    drawBullets();
+    drawObstacles();
+
     updateBullets();
-    drawScore();
+    drawBullets();
 
     if (shootCooldown > 0) shootCooldown--;
 
-    score++;
+    score += 1;
+    drawScore();
+
     requestAnimationFrame(gameLoop);
   }
 
-  setInterval(createObstacle, 800);
-
-  window.addEventListener("keydown", e => {
-    keys[e.key] = true;
-    lastInputTime = Date.now();
-    if (e.key === " ") fireBullet();
-  });
-  window.addEventListener("keyup", e => {
-    keys[e.key] = false;
-    lastInputTime = Date.now();
-  });
   window.addEventListener("resize", () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   });
 
-  // Mobile button events
-  const btnLeft = document.getElementById("btnLeft");
-  const btnRight = document.getElementById("btnRight");
-  const btnShoot = document.getElementById("btnShoot");
-
-  function preventDefaultTouch(e) {
-    e.preventDefault();
-  }
-  btnLeft.addEventListener("touchstart", e => { leftPressed = true; lastInputTime = Date.now(); preventDefaultTouch(e); });
-  btnLeft.addEventListener("touchend", e => { leftPressed = false; preventDefaultTouch(e); });
-  btnLeft.addEventListener("touchcancel", e => { leftPressed = false; preventDefaultTouch(e); });
-
-  btnRight.addEventListener("touchstart", e => { rightPressed = true; lastInputTime = Date.now(); preventDefaultTouch(e); });
-  btnRight.addEventListener("touchend", e => { rightPressed = false; preventDefaultTouch(e); });
-  btnRight.addEventListener("touchcancel", e => { rightPressed = false; preventDefaultTouch(e); });
-
-  btnShoot.addEventListener("touchstart", e => { 
-    if (!shootPressed) {
-      shootPressed = true; 
-      lastInputTime = Date.now();
-      fireBullet();
-    }
-    preventDefaultTouch(e);
+  window.addEventListener("keydown", e => {
+    if (e.repeat) return;
+    keys[e.key] = true;
   });
-  btnShoot.addEventListener("touchend", e => { shootPressed = false; preventDefaultTouch(e); });
-  btnShoot.addEventListener("touchcancel", e => { shootPressed = false; preventDefaultTouch(e); });
+  window.addEventListener("keyup", e => {
+    keys[e.key] = false;
+  });
+
+  // Mobile button event handlers
+  document.getElementById("btnLeft").addEventListener("touchstart", e => {
+    e.preventDefault();
+    leftPressed = true;
+    lastInputTime = Date.now();
+  });
+  document.getElementById("btnLeft").addEventListener("touchend", e => {
+    e.preventDefault();
+    leftPressed = false;
+  });
+  document.getElementById("btnRight").addEventListener("touchstart", e => {
+    e.preventDefault();
+    rightPressed = true;
+    lastInputTime = Date.now();
+  });
+  document.getElementById("btnRight").addEventListener("touchend", e => {
+    e.preventDefault();
+    rightPressed = false;
+  });
+  document.getElementById("btnShoot").addEventListener("touchstart", e => {
+    e.preventDefault();
+    shootPressed = true;
+    lastInputTime = Date.now();
+  });
+  document.getElementById("btnShoot").addEventListener("touchend", e => {
+    e.preventDefault();
+    shootPressed = false;
+  });
+  document.getElementById("btnBoost").addEventListener("touchstart", e => {
+    e.preventDefault();
+    boostPressed = true;
+    lastInputTime = Date.now();
+  });
+  document.getElementById("btnBoost").addEventListener("touchend", e => {
+    e.preventDefault();
+    //boostPressed = false; // No need, boost is one-time press
+  });
 
   gameLoop();
 </script>
